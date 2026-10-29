@@ -6,7 +6,8 @@
   const defaultState = {
     username: "Byron",
     friendCode: "BERRY-01",
-    coins: 0,
+    coins: 1000,
+    bonus1000Granted: true,
     berries: 50,
     equippedCharId: "c1",
     unlockedCharIds: ["c1"], // ONLY Starter #1 unlocked! Must pay Coins for the other 47!
@@ -27,6 +28,11 @@
       const raw = localStorage.getItem(STATE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        if (!parsed.bonus1000Granted) {
+          parsed.coins = (Number(parsed.coins) || 0) + 1000;
+          parsed.bonus1000Granted = true;
+          localStorage.setItem(STATE_KEY, JSON.stringify({ ...defaultState, ...parsed }));
+        }
         return { ...defaultState, ...parsed };
       }
     } catch (e) {}
