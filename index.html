@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BerryBox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=13" />
+</head>
+<body>
+  <div class="ambient-bg"></div>
+
+  <div class="app-shell">
+    <!-- ULTRA-CLEAN LEFT SIDEBAR -->
+    <aside class="left-sidebar">
+      <div class="brand-header" id="brandHomeBtn">
+        <!-- Square Blueberry Logo -->
+        <svg viewBox="0 0 64 64" width="42" height="42" class="square-berry-svg">
+          <defs>
+            <linearGradient id="berryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" class="grad-stop-1" />
+              <stop offset="100%" class="grad-stop-2" />
+            </linearGradient>
+          </defs>
+          <path d="M22 10 L26 3 L32 9 L38 3 L42 10 Z" fill="#1e88e5" stroke="#0a0f1d" stroke-width="3.2" stroke-linejoin="round"/>
+          <rect x="8" y="10" width="48" height="48" rx="13" ry="13" fill="url(#berryGrad)" stroke="#0a0f1d" stroke-width="3.8"/>
+          <path d="M15 20 Q15 16 20 16 L28 16" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" opacity="0.85"/>
+          <ellipse cx="24" cy="34" rx="4.2" ry="5.2" fill="#0a0f1d"/>
+          <ellipse cx="40" cy="34" rx="4.2" ry="5.2" fill="#0a0f1d"/>
+          <circle cx="22.5" cy="32" r="1.7" fill="#ffffff"/>
+          <circle cx="38.5" cy="32" r="1.7" fill="#ffffff"/>
+          <path d="M28 39 Q32 43 36 39" fill="none" stroke="#0a0f1d" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <span class="brand-title">BerryBox</span>
+      </div>
+
+      <!-- Coin & Berry Status Pill -->
+      <div class="wallet-strip">
+        <div class="wallet-pill" title="Earn Coins by playing games to unlock the 48 Cute Characters!">
+          <span>🪙</span>
+          <strong id="coinBalanceText">0</strong>
+        </div>
+        <div class="wallet-pill" title="Daily AI Remix Berries">
+          <span>🫐</span>
+          <strong id="berryCountText">50</strong>
+        </div>
+      </div>
+
+      <!-- 4 Clean Navigation Buttons -->
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" data-tab="foryou">For You</button>
+        <button class="nav-btn" data-tab="friends">Friends</button>
+        <button class="nav-btn" data-tab="create">Create</button>
+        <button class="nav-btn" data-tab="shop">Shop & View</button>
+      </nav>
+
+      <!-- Equipped Character Mini Card -->
+      <div class="sidebar-footer" id="sidebarCharCard" title="Click to open Character Shop">
+        <canvas id="sidebarAvatarCanvas" width="44" height="44"></canvas>
+        <div class="mini-char-info">
+          <strong id="equippedCharName">Lil Blueberry</strong>
+          <span id="sidebarUsername">@Byron</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT STAGE -->
+    <main class="main-stage">
+      <!-- ==================== TAB 1: FOR YOU (4 CLEAN ROWS) ==================== -->
+      <section class="tab-view active" id="tab-foryou">
+        <div class="feed-rows-container" id="feedRowsContainer"></div>
+      </section>
+
+      <!-- ==================== TAB 2: FRIENDS (HONEST EMPTY STATE) ==================== -->
+      <section class="tab-view" id="tab-friends">
+        <div class="clean-center-card">
+          <h2>Friends & Challenges</h2>
+          <p class="muted-line">Your Friend Code: <strong id="myFriendCodeDisplay">BERRY-01</strong></p>
+
+          <div class="add-friend-row">
+            <input type="text" id="friendCodeInput" placeholder="Enter a friend's code..." />
+            <button class="primary-btn" id="addFriendBtn">Add Friend</button>
+          </div>
+
+          <div id="friendsListContainer" class="empty-state-box">
+            <!-- Honest empty state when 0 friends -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 3: CREATE (NEW FROM TEMPLATE OR REMIX) ==================== -->
+      <section class="tab-view" id="tab-create">
+        <div class="studio-split">
+          <!-- Left: Mode Switcher + Template Picker + AI Creator + Sliders -->
+          <div class="studio-left">
+            <!-- Mode Toggle: Create From Blank Template vs Remix Existing Game -->
+            <div class="studio-mode-tabs">
+              <button class="mode-tab-btn active" id="modeBtnTemplate">🆕 Create New from Template</button>
+              <button class="mode-tab-btn" id="modeBtnRemix">🔀 Remix Existing Game</button>
+            </div>
+
+            <div class="studio-box">
+              <label id="studioPickerLabel" style="font-size:0.78rem;font-weight:800;display:block;margin-bottom:5px;">Choose Blank Game Template</label>
+              <select id="studioBaseSelect" class="clean-select"></select>
+              <p id="templateDescText" style="font-size:0.74rem;color:#475569;font-weight:700;margin:6px 0;"></p>
+              <input type="text" id="studioTitleInput" class="clean-input" placeholder="Name your game..." style="margin-top:4px;" />
+            </div>
+
+            <div class="studio-box ai-box">
+              <div class="box-head">
+                <strong>✨ AI Game Creator & Remixer</strong>
+                <span class="badge-pill">-1 🫐</span>
+              </div>
+              <textarea id="aiPromptInput" rows="2" placeholder="Describe what you want! e.g. 'Make a lava volcano world with falling meteors, giant character, infinite jetpack, and laser blasters!'"></textarea>
+
+              <div class="mutator-pills-wrap" style="margin:6px 0;">
+                <button class="mut-btn ai-preset-chip" data-p="A game where you are on a fast horse racing against other players from the back view where you have to turn to keep in front of others!">🐎 3D Horse Race</button>
+                <button class="mut-btn ai-preset-chip" data-p="Make a lava volcano world with falling meteors and infinite jetpack!">🌋 Lava + Meteors</button>
+                <button class="mut-btn ai-preset-chip" data-p="Low moon gravity in deep galaxy space with laser blaster and super jump!">🌙 Moon + Lasers</button>
+                <button class="mut-btn ai-preset-chip" data-p="Giant character mode with twin clone in a matrix cyber world!">🦖 Giant + Twin</button>
+              </div>
+
+              <button class="primary-btn full-btn" id="runAiBtn">✨ Build / Remix with AI (-1 🫐)</button>
+              <div id="aiResponseBox" style="margin-top:8px;padding:8px 10px;background:#ffffff;border:2px solid #0a0f1d;border-radius:10px;font-size:0.76rem;font-weight:800;color:#1d6ff2;">
+                🤖 AI Ready: Type a prompt above or click a preset chip to transform the game!
+              </div>
+            </div>
+
+            <div class="studio-box">
+              <div class="box-head">
+                <strong>🎨 World Theme & Physics</strong>
+                <span class="badge-pill">Free</span>
+              </div>
+              <select id="studioThemeSelect" class="clean-select" style="margin-bottom:10px;">
+                <option value="default">🌍 Original Default World</option>
+                <option value="volcano">🌋 Lava Volcano (Embers)</option>
+                <option value="arctic">❄️ Arctic Blizzard (Snow)</option>
+                <option value="cyber">👾 Matrix Cyber (Digital Rain)</option>
+                <option value="galaxy">🌌 Deep Galaxy (Starfield)</option>
+                <option value="candyland">🍭 Candyland Pink (Confetti)</option>
+                <option value="gold">👑 Royal Gold (Sparkles)</option>
+              </select>
+              <div class="sliders-2col">
+                <label>Gravity (<span id="lblGrav">1.0x</span>) <input type="range" id="slGrav" min="0.3" max="2.0" step="0.1" value="1.0" /></label>
+                <label>Speed (<span id="lblSpd">1.1x</span>) <input type="range" id="slSpd" min="0.5" max="2.0" step="0.1" value="1.1" /></label>
+                <label>Jump (<span id="lblJmp">1.1x</span>) <input type="range" id="slJmp" min="0.5" max="2.0" step="0.1" value="1.1" /></label>
+                <label>Bounce (<span id="lblBnc">0.5x</span>) <input type="range" id="slBnc" min="0.0" max="1.8" step="0.1" value="0.5" /></label>
+              </div>
+              <div class="mutator-pills-wrap" id="studioMutatorsWrap"></div>
+            </div>
+
+            <button class="primary-btn full-btn" id="publishRemixBtn">🚀 Publish Game to Feed</button>
+          </div>
+
+          <!-- Right: Live Game Preview -->
+          <div class="studio-right">
+            <canvas id="studioCanvas" width="700" height="440"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 4: CHARACTER COIN SHOP & MAIN VIEW SETTINGS ==================== -->
+      <section class="tab-view" id="tab-shop">
+        <div class="shop-view-grid">
+          <!-- Left: 48 Cute Chubby Characters Shop -->
+          <div class="shop-panel">
+            <div class="shop-header">
+              <h2>🫐 Cute Characters Shop (48)</h2>
+              <span class="coin-pill">🪙 <strong id="shopCoinText">0</strong> Coins</span>
+            </div>
+            <div class="char-grid" id="charShopGrid"></div>
+          </div>
+
+          <!-- Right: Main View Settings (Algorithm Mixer) -->
+          <div class="mixer-panel">
+            <h2>🎛️ Main View Settings</h2>
+            <p class="muted-line">Adjust how much say each category gets in your For You feed:</p>
+
+            <div class="mixer-stack">
+              <div class="mixer-row">
+                <div class="mixer-top"><span>What You Like</span><strong id="lblMixLike">45%</strong></div>
+                <input type="range" id="rngMixLike" min="0" max="100" value="45" />
+              </div>
+              <div class="mixer-row">
+                <div class="mixer-top"><span>What's Trending</span><strong id="lblMixTrend">35%</strong></div>
+                <input type="range" id="rngMixTrend" min="0" max="100" value="35" />
+              </div>
+              <div class="mixer-row">
+                <div class="mixer-top"><span>Friends' Creations</span><strong id="lblMixFriend">20%</strong></div>
+                <input type="range" id="rngMixFriend" min="0" max="100" value="20" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- FULLSCREEN PLAY MODAL -->
+  <div class="play-modal hidden" id="playModal">
+    <div class="play-modal-box">
+      <header class="play-modal-bar">
+        <div class="play-modal-left">
+          <h2 id="modalTitle">Moto X3M</h2>
+          <span class="score-pill">Score: <strong id="modalScore">0</strong></span>
+          <span class="coin-pill">🪙 <strong id="modalCoins">0</strong></span>
+        </div>
+        <div class="play-modal-right">
+          <span id="modalControlsHint" class="controls-pill">WASD / Arrows + Space</span>
+          <button class="outline-btn" id="modalRemixBtn">Remix</button>
+          <button class="close-btn" id="modalCloseBtn">✕</button>
+        </div>
+      </header>
+      <div class="play-canvas-holder">
+        <canvas id="modalCanvas" width="880" height="500"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toastBox"></div>
+
+  <script src="data.js?v=13"></script>
+  <script src="engine.js?v=13"></script>
+  <script src="ai.js?v=13"></script>
+  <script src="app.js?v=13"></script>
+</body>
+</html>
