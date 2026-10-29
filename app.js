@@ -2,28 +2,52 @@
 
 (function() {
   const STATE_KEY = "berrybox_v2_clean_state";
+  const ACCOUNTS_DB_KEY = "berrybox_accounts_db_v1";
 
-  const defaultState = {
-    username: "Byron",
-    friendCode: "BERRY-01",
-    coins: 1000,
-    bonus1000Granted: true,
-    berries: 50,
-    equippedCharId: "c1",
-    unlockedCharIds: ["c1"], // ONLY Starter #1 unlocked! Must pay Coins for the other 47!
-    feedMix: { like: 45, trend: 35, friend: 20 },
-    likedCategories: { racing: 10, climber: 10, rhythm: 10, sports: 10, driving: 10 },
-    friends: [], // ZERO fake friends!
-    customGames: []
-  };
+  function makeNewAccountTemplate(username, password = "") {
+    const cleanName = String(username || "Player").trim();
+    const isByron = cleanName.toLowerCase() === "byron";
+    return {
+      username: cleanName,
+      password: String(password || ""),
+      friendCode: `BERRY-${cleanName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "01"}`,
+      coins: isByron ? 1000 : 100, // Byron starts with 1,000 Coins; new friend accounts get 100 starter Coins!
+      bonus1000Granted: true,
+      berries: 50,
+      equippedCharId: "c1",
+      unlockedCharIds: ["c1"],
+      feedMix: { like: 45, trend: 35, friend: 20 },
+      likedCategories: { racing: 10, climber: 10, rhythm: 10, sports: 10, driving: 10 },
+      friends: [],
+      customGames: []
+    };
+  }
+
+  const defaultState = makeNewAccountTemplate("Byron", "");
+
+  function loadAccountsDB() {
+    try {
+      const raw = localStorage.getItem(ACCOUNTS_DB_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return {};
+  }
+
+  function saveAccountsDB(db) {
+    try {
+      localStorage.setItem(ACCOUNTS_DB_KEY, JSON.stringify(db));
+    } catch (e) {}
+  }
 
   let state = loadState();
   let hoverInstance = null;
   let studioInstance = null;
   let modalInstance = null;
+  let activeChallenge = null;
   let studioConfig = JSON.parse(JSON.stringify(window.BERRY_DATA.starterGames[0]));
 
   function loadState() {
+    const db = loadAccountsDB();
     try {
       const raw = localStorage.getItem(STATE_KEY);
       if (raw) {
@@ -31,17 +55,26 @@
         if (!parsed.bonus1000Granted) {
           parsed.coins = (Number(parsed.coins) || 0) + 1000;
           parsed.bonus1000Granted = true;
-          localStorage.setItem(STATE_KEY, JSON.stringify({ ...defaultState, ...parsed }));
         }
-        return { ...defaultState, ...parsed };
+        const merged = { ...defaultState, ...parsed };
+        db[merged.username.toLowerCase()] = merged;
+        saveAccountsDB(db);
+        localStorage.setItem(STATE_KEY, JSON.stringify(merged));
+        return merged;
       }
     } catch (e) {}
-    return JSON.parse(JSON.stringify(defaultState));
+    const fresh = JSON.parse(JSON.stringify(defaultState));
+    db[fresh.username.toLowerCase()] = fresh;
+    saveAccountsDB(db);
+    return fresh;
   }
 
   function saveState() {
     try {
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
+      const db = loadAccountsDB();
+      db[(state.username || "Byron").toLowerCase()] = state;
+      saveAccountsDB(db);
     } catch (e) {}
     updateHUD();
   }
@@ -51,7 +84,19 @@
   }
 
   function getAllGames() {
-    return [...state.customGames, ...window.BERRY_DATA.starterGames];
+    // Include custom games published by your added Friends from the local accounts DB!
+    const db = loadAccountsDB();
+    const friendGames = [];
+    (state.friends || []).forEach(f => {
+      const cleanName = (f.handle || "").replace(/^@/, "").toLowerCase();
+      const friendAcc = db[cleanName];
+      if (friendAcc && Array.isArray(friendAcc.customGames)) {
+        friendAcc.customGames.forEach(g => {
+          if (!friendGames.some(x => x.id === g.id)) friendGames.push(g);
+        });
+      }
+    });
+    return [...state.customGames, ...friendGames, ...window.BERRY_DATA.starterGames];
   }
 
   function computeMatchPercent(game) {
@@ -136,13 +181,16 @@
     temp.destroy();
   }
 
-  // ==================== 2. PLAY MODAL ====================
-  function openPlayModal(game) {
+  // ==================== 2. PLAY MODAL (+ LIVE FRIEND CHALLENGE TRACKING) ====================
+  function openPlayModal(game, challengeObj = null) {
+    activeChallenge = challengeObj;
     state.likedCategories[game.category] = (state.likedCategories[game.category] || 10) + 2;
     saveState();
 
     document.getElementById("playModal").classList.remove("hidden");
-    document.getElementById("modalTitle").textContent = game.title;
+    document.getElementById("modalTitle").textContent = challengeObj
+      ? `⚔️ Challenge vs ${challengeObj.handle}: Beat ${challengeObj.targetScore} in ${game.title}!`
+      : game.title;
     document.getElementById("modalScore").textContent = "0";
     document.getElementById("modalCoins").textContent = state.coins;
     document.getElementById("modalControlsHint").textContent = game.controls || "WASD / Arrows + Space";
@@ -154,6 +202,15 @@
       isPreview: false,
       onScoreChange: (pts) => {
         document.getElementById("modalScore").textContent = pts;
+        if (activeChallenge && !activeChallenge.completed && pts >= activeChallenge.targetScore) {
+          activeChallenge.completed = true;
+          state.coins += 150;
+          saveState();
+          document.getElementById("modalCoins").textContent = state.coins;
+          window.berrySound.play("score");
+          toast(`🏆 CHALLENGE WON! You beat ${activeChallenge.handle}'s score of ${activeChallenge.targetScore} (+150 🪙)!`);
+          renderFriends();
+        }
       },
       onCoinEarned: (amount) => {
         state.coins += amount;
@@ -170,6 +227,7 @@
   }
 
   function closePlayModal() {
+    activeChallenge = null;
     document.getElementById("playModal").classList.add("hidden");
     if (modalInstance) {
       modalInstance.destroy();
@@ -178,24 +236,63 @@
     renderFeed();
   }
 
-  // ==================== 3. FRIENDS TAB (HONEST EMPTY STATE) ====================
+  // ==================== 3. WORKING FRIENDS & SCORE CHALLENGES TAB ====================
   function renderFriends() {
     const box = document.getElementById("friendsListContainer");
-    document.getElementById("myFriendCodeDisplay").textContent = state.friendCode;
+    document.getElementById("myFriendCodeDisplay").textContent = state.friendCode || `BERRY-${state.username.toUpperCase()}`;
+
+    const chSel = document.getElementById("challengeGameSelect");
+    if (chSel && chSel.options.length === 0) {
+      chSel.innerHTML = window.BERRY_DATA.starterGames.map(g =>
+        `<option value="${g.id}">${g.title}</option>`
+      ).join("");
+    }
 
     if (!state.friends || state.friends.length === 0) {
       box.innerHTML = `
         <p>You have <strong>0 friends</strong> and <strong>0 active challenges</strong> right now.</p>
-        <p style="margin-top:6px;font-size:0.8rem;">When someone else gets BerryBox, enter their Friend Code above to see their games and challenges!</p>
+        <p style="margin-top:6px;font-size:0.8rem;">
+          When your friend creates an account or sends you their <strong>Share Code / Challenge Code</strong>, paste it above to see their avatar, play their custom games, and beat their Score Challenges!
+        </p>
       `;
-    } else {
-      box.innerHTML = state.friends.map(f => `
-        <div style="display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1.5px solid #dbeafe;">
-          <strong>${f.handle}</strong>
-          <span>Code: ${f.code}</span>
-        </div>
-      `).join("");
+      return;
     }
+
+    box.innerHTML = "";
+    state.friends.forEach((f, idx) => {
+      const charObj = window.BERRY_DATA.characters.find(c => c.id === f.charId) || window.BERRY_DATA.characters[(idx + 2) % 48];
+      const gameObj = getAllGames().find(g => g.id === f.gameId) || window.BERRY_DATA.starterGames[0];
+      const targetScore = f.targetScore || 180;
+
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1.5px solid #dbeafe;gap:10px;text-align:left;";
+      row.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;">
+          <canvas width="42" height="42" style="background:#e0f2fe;border:2px solid #0a0f1d;border-radius:10px;"></canvas>
+          <div>
+            <strong style="font-size:0.95rem;color:#0a0f1d;">${f.handle}</strong>
+            <div style="font-size:0.75rem;color:#475569;font-weight:700;">
+              ⚔️ Challenge: Beat <strong>${targetScore} pts</strong> in <strong>${gameObj.title}</strong>
+            </div>
+          </div>
+        </div>
+        <div>
+          ${f.completed
+            ? `<span class="badge-pill" style="background:#dcfce7;color:#15803d;">🏆 Beat! (+150 🪙)</span>`
+            : `<button class="primary-btn play-ch-btn" style="padding:7px 12px;font-size:0.78rem;">⚔️ Play Challenge (+150 🪙)</button>`
+          }
+        </div>
+      `;
+
+      const cv = row.querySelector("canvas");
+      window.drawChubbyCharacter(cv.getContext("2d"), 21, 23, 12, charObj);
+
+      const btn = row.querySelector(".play-ch-btn");
+      if (btn) {
+        btn.onclick = () => openPlayModal(gameObj, f);
+      }
+      box.appendChild(row);
+    });
   }
 
   // ==================== 4. CREATE NEW FROM TEMPLATE OR REMIX STUDIO ====================
@@ -495,12 +592,14 @@
     rFriend.oninput = updateMix;
   }
 
-  // ==================== HUD & NAVIGATION ====================
+  // ==================== HUD, AUTH MODAL & NAVIGATION ====================
   function updateHUD() {
     document.getElementById("coinBalanceText").textContent = state.coins;
     document.getElementById("berryCountText").textContent = state.berries;
     const eq = getEquippedChar();
     document.getElementById("equippedCharName").textContent = eq.name;
+    const userEl = document.getElementById("sidebarUsername");
+    if (userEl) userEl.textContent = `@${state.username}`;
 
     const sideCanvas = document.getElementById("sidebarAvatarCanvas");
     if (sideCanvas) {
@@ -508,6 +607,95 @@
       ctx.clearRect(0, 0, 44, 44);
       window.drawChubbyCharacter(ctx, 22, 24, 13, eq);
     }
+  }
+
+  let authMode = "login"; // "login" | "signup"
+
+  function openAuthModal() {
+    const modal = document.getElementById("authModal");
+    modal.classList.remove("hidden");
+    renderSavedAccountsInAuth();
+  }
+
+  function renderSavedAccountsInAuth() {
+    const wrap = document.getElementById("savedAccountsWrap");
+    const db = loadAccountsDB();
+    const accounts = Object.values(db);
+    if (accounts.length === 0) {
+      wrap.innerHTML = "";
+      return;
+    }
+
+    wrap.innerHTML = `
+      <div style="font-size:0.75rem;font-weight:800;color:#475569;margin-bottom:6px;text-align:left;">
+        Quick Switch Account (${accounts.length} on this device):
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;" id="savedAccCards"></div>
+    `;
+    const cardsBox = wrap.querySelector("#savedAccCards");
+    accounts.forEach(acc => {
+      const btn = document.createElement("button");
+      btn.className = "outline-btn";
+      btn.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:0.78rem;";
+      btn.innerHTML = `<span>👤 <strong>@${acc.username}</strong></span> <span style="color:#b45309;">(${acc.coins} 🪙)</span>`;
+      btn.onclick = () => {
+        loginIntoAccount(acc.username, acc.password || "", true);
+      };
+      cardsBox.appendChild(btn);
+    });
+  }
+
+  function loginIntoAccount(username, password, skipPassCheck = false) {
+    const clean = String(username || "").trim();
+    if (!clean) {
+      toast("⚠️ Please enter a username!");
+      return;
+    }
+    const key = clean.toLowerCase();
+    const db = loadAccountsDB();
+
+    if (authMode === "signup" && !skipPassCheck) {
+      if (db[key]) {
+        toast(`⚠️ @${clean} already exists! Switched to Log In.`);
+        authMode = "login";
+      } else {
+        const newAcc = makeNewAccountTemplate(clean, password);
+        db[key] = newAcc;
+        saveAccountsDB(db);
+        state = newAcc;
+        saveState();
+        finishLogin(`🎉 Created account @${state.username} (+${state.coins} 🪙)!`);
+        return;
+      }
+    }
+
+    if (db[key]) {
+      const existing = db[key];
+      if (!skipPassCheck && existing.password && password && existing.password !== password) {
+        toast("⚠️ Incorrect password/PIN!");
+        return;
+      }
+      state = existing;
+      saveState();
+      finishLogin(`👋 Welcome back, @${state.username}!`);
+    } else {
+      // Auto-create if logging into a brand new username!
+      const newAcc = makeNewAccountTemplate(clean, password);
+      db[key] = newAcc;
+      saveAccountsDB(db);
+      state = newAcc;
+      saveState();
+      finishLogin(`🎉 Created & logged in as @${state.username}!`);
+    }
+  }
+
+  function finishLogin(msg) {
+    document.getElementById("authModal").classList.add("hidden");
+    updateHUD();
+    renderFeed();
+    renderFriends();
+    renderShopAndMixer();
+    toast(msg);
   }
 
   function switchTab(tabId) {
@@ -539,6 +727,38 @@
     renderFriends();
     initStudio();
     renderShopAndMixer();
+    openAuthModal(); // Ask to Log In or Create New Account when opening the tab!
+
+    // Auth Modal Controls
+    const tabLogin = document.getElementById("authTabLogin");
+    const tabSignup = document.getElementById("authTabSignup");
+    const submitAuth = document.getElementById("authSubmitBtn");
+
+    tabLogin.onclick = () => {
+      authMode = "login";
+      tabLogin.classList.add("active");
+      tabSignup.classList.remove("active");
+      submitAuth.textContent = "🚀 Log In to BerryBox";
+    };
+    tabSignup.onclick = () => {
+      authMode = "signup";
+      tabSignup.classList.add("active");
+      tabLogin.classList.remove("active");
+      submitAuth.textContent = "🆕 Create Account & Play";
+    };
+    submitAuth.onclick = () => {
+      const u = document.getElementById("authUsernameInput").value;
+      const p = document.getElementById("authPassInput").value;
+      loginIntoAccount(u, p, false);
+    };
+    document.getElementById("authUsernameInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitAuth.click();
+    });
+    document.getElementById("switchAccountBtn").onclick = () => {
+      document.getElementById("authUsernameInput").value = "";
+      document.getElementById("authPassInput").value = "";
+      openAuthModal();
+    };
 
     document.querySelectorAll(".nav-btn").forEach(btn => {
       btn.addEventListener("click", () => switchTab(btn.dataset.tab));
@@ -547,15 +767,80 @@
     document.getElementById("sidebarCharCard").onclick = () => switchTab("shop");
     document.getElementById("modalCloseBtn").onclick = closePlayModal;
 
+    // Copy Share Code Button
+    document.getElementById("copyFriendCodeBtn").onclick = () => {
+      const shareCode = `CHALLENGE:${state.username}:${state.equippedCharId}:moto_x3m:250`;
+      navigator.clipboard?.writeText(shareCode).catch(() => {});
+      toast(`📋 Copied Share Code: ${shareCode}`);
+    };
+
+    // Create Custom Score Challenge Code Button
+    document.getElementById("createChallengeBtn").onclick = () => {
+      const gId = document.getElementById("challengeGameSelect").value || "moto_x3m";
+      const pts = Math.max(10, parseInt(document.getElementById("challengeScoreInput").value) || 250);
+      const code = `CHALLENGE:${state.username}:${state.equippedCharId}:${gId}:${pts}`;
+      navigator.clipboard?.writeText(code).catch(() => {});
+      document.getElementById("friendCodeInput").value = code;
+      toast(`🔗 Copied Challenge Code! Send "${code}" to your friend!`);
+    };
+
+    // Add Friend / Paste Challenge Code Button
     document.getElementById("addFriendBtn").onclick = () => {
       const inp = document.getElementById("friendCodeInput");
-      const code = inp.value.trim().toUpperCase();
-      if (!code) return;
-      state.friends.push({ handle: `@Friend_${code.slice(0, 4)}`, code });
+      const raw = inp.value.trim();
+      if (!raw) return;
+
+      const db = loadAccountsDB();
+      let friendObj = null;
+
+      // 1. Check if it's a Cross-Computer Challenge/Share Code (CHALLENGE:Name:CharId:GameId:Score)
+      if (raw.toUpperCase().startsWith("CHALLENGE:")) {
+        const parts = raw.split(":");
+        const fName = parts[1] || "Friend";
+        const fChar = (parts[2] || "c2").toLowerCase();
+        const fGame = (parts[3] || "moto_x3m").toLowerCase();
+        const fScore = parseInt(parts[4]) || 250;
+        friendObj = {
+          handle: fName.startsWith("@") ? fName : `@${fName}`,
+          code: raw,
+          charId: fChar,
+          gameId: fGame,
+          targetScore: fScore,
+          completed: false
+        };
+      } else {
+        // 2. Check if it matches a local account on this computer (by username or BERRY-NAME code)
+        const cleanLookup = raw.replace(/^BERRY-/i, "").replace(/^@/, "").toLowerCase();
+        const localMatch = db[cleanLookup] || Object.values(db).find(a => (a.friendCode || "").toLowerCase() === raw.toLowerCase());
+        if (localMatch) {
+          friendObj = {
+            handle: `@${localMatch.username}`,
+            code: localMatch.friendCode,
+            charId: localMatch.equippedCharId || "c2",
+            gameId: (localMatch.customGames && localMatch.customGames[0]?.id) || "moto_x3m",
+            targetScore: 220,
+            completed: false
+          };
+        } else {
+          // 3. Otherwise add by Friend Code name
+          const display = raw.replace(/^BERRY-/i, "").replace(/^@/, "");
+          friendObj = {
+            handle: `@${display.charAt(0).toUpperCase() + display.slice(1).toLowerCase()}`,
+            code: raw.toUpperCase(),
+            charId: "c5",
+            gameId: "moto_x3m",
+            targetScore: 200,
+            completed: false
+          };
+        }
+      }
+
+      state.friends.unshift(friendObj);
       inp.value = "";
       saveState();
       renderFriends();
-      toast(`Added friend code ${code}!`);
+      renderFeed();
+      toast(`🎉 Added ${friendObj.handle}! Click "⚔️ Play Challenge" to beat their score!`);
     };
 
     window.addEventListener("keydown", (e) => {

@@ -56,7 +56,7 @@
         <button class="nav-btn" data-tab="shop">Shop & View</button>
       </nav>
 
-      <!-- Equipped Character Mini Card -->
+      <!-- Equipped Character Mini Card + Switch Account -->
       <div class="sidebar-footer" id="sidebarCharCard" title="Click to open Character Shop">
         <canvas id="sidebarAvatarCanvas" width="44" height="44"></canvas>
         <div class="mini-char-info">
@@ -64,6 +64,7 @@
           <span id="sidebarUsername">@Byron</span>
         </div>
       </div>
+      <button class="outline-btn" id="switchAccountBtn" style="width:100%;font-size:0.76rem;padding:7px 10px;">👤 Switch / Create Account</button>
     </aside>
 
     <!-- MAIN CONTENT STAGE -->
@@ -73,19 +74,40 @@
         <div class="feed-rows-container" id="feedRowsContainer"></div>
       </section>
 
-      <!-- ==================== TAB 2: FRIENDS (HONEST EMPTY STATE) ==================== -->
+      <!-- ==================== TAB 2: FRIENDS & CHALLENGES (WORKING!) ==================== -->
       <section class="tab-view" id="tab-friends">
-        <div class="clean-center-card">
-          <h2>Friends & Challenges</h2>
-          <p class="muted-line">Your Friend Code: <strong id="myFriendCodeDisplay">BERRY-01</strong></p>
+        <div class="clean-center-card" style="max-width:680px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+            <div>
+              <h2>Friends & Score Challenges</h2>
+              <p class="muted-line" style="margin:2px 0 0;">Your Friend Code: <strong id="myFriendCodeDisplay" style="color:#1d6ff2;">BERRY-BYRON</strong></p>
+            </div>
+            <button class="outline-btn" id="copyFriendCodeBtn" style="font-size:0.78rem;">📋 Copy My Share Code</button>
+          </div>
 
           <div class="add-friend-row">
-            <input type="text" id="friendCodeInput" placeholder="Enter a friend's code..." />
+            <input type="text" id="friendCodeInput" placeholder="Paste a friend's Share Code or Friend Code (e.g. BERRY-ALEX)..." />
             <button class="primary-btn" id="addFriendBtn">Add Friend</button>
           </div>
 
+          <!-- Send a Score Challenge to Friends -->
+          <div class="studio-box" style="margin-bottom:14px;background:#f8fbff;">
+            <div class="box-head">
+              <strong>⚔️ Create a Score Challenge for a Friend</strong>
+              <span class="badge-pill">Win +150 🪙</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+              <select id="challengeGameSelect" class="clean-select" style="flex:1;min-width:170px;"></select>
+              <input type="number" id="challengeScoreInput" class="clean-input" value="250" min="10" style="width:110px;" placeholder="Target Score" />
+              <button class="primary-btn" id="createChallengeBtn" style="padding:8px 14px;font-size:0.8rem;">🔗 Copy Challenge Code</button>
+            </div>
+            <p style="font-size:0.73rem;color:#475569;font-weight:700;margin-top:6px;">
+              Send the copied code to a friend! When they paste it in "Add Friend" above, they can play to beat your score!
+            </p>
+          </div>
+
           <div id="friendsListContainer" class="empty-state-box">
-            <!-- Honest empty state when 0 friends -->
+            <!-- Honest empty state when 0 friends, or list of friends + playable challenges -->
           </div>
         </div>
       </section>
@@ -219,11 +241,47 @@
     </div>
   </div>
 
+  <!-- LOGIN / CREATE ACCOUNT MODAL (SHOWN ON TAB OPEN) -->
+  <div class="play-modal" id="authModal">
+    <div class="clean-center-card" style="width:430px;max-width:94vw;background:#ffffff;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <svg viewBox="0 0 64 64" width="38" height="38" class="square-berry-svg">
+          <path d="M22 10 L26 3 L32 9 L38 3 L42 10 Z" fill="#1e88e5" stroke="#0a0f1d" stroke-width="3.2" stroke-linejoin="round"/>
+          <rect x="8" y="10" width="48" height="48" rx="13" ry="13" fill="#1d6ff2" stroke="#0a0f1d" stroke-width="3.8"/>
+          <ellipse cx="24" cy="34" rx="4.2" ry="5.2" fill="#0a0f1d"/>
+          <ellipse cx="40" cy="34" rx="4.2" ry="5.2" fill="#0a0f1d"/>
+          <circle cx="22.5" cy="32" r="1.7" fill="#ffffff"/>
+          <circle cx="38.5" cy="32" r="1.7" fill="#ffffff"/>
+          <path d="M28 39 Q32 43 36 39" fill="none" stroke="#0a0f1d" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <h2 style="margin:0;font-size:1.35rem;">Welcome to BerryBox</h2>
+          <p class="muted-line" style="margin:0;font-size:0.78rem;">Log in or create a new account so you & your friends can play!</p>
+        </div>
+      </div>
+
+      <!-- Quick Saved Accounts Picker -->
+      <div id="savedAccountsWrap" style="margin-bottom:12px;"></div>
+
+      <!-- Toggle Login vs Create New Account -->
+      <div class="studio-mode-tabs" style="margin-bottom:10px;">
+        <button class="mode-tab-btn active" id="authTabLogin">🔑 Log In</button>
+        <button class="mode-tab-btn" id="authTabSignup">🆕 Create New Account</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input type="text" id="authUsernameInput" class="clean-input" placeholder="Username (e.g. Byron)" />
+        <input type="password" id="authPassInput" class="clean-input" placeholder="Password / PIN (optional for quick play)" />
+        <button class="primary-btn full-btn" id="authSubmitBtn">🚀 Enter BerryBox</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast hidden" id="toastBox"></div>
 
-  <script src="data.js?v=14"></script>
-  <script src="engine.js?v=14"></script>
-  <script src="ai.js?v=14"></script>
-  <script src="app.js?v=14"></script>
+  <script src="data.js?v=15"></script>
+  <script src="engine.js?v=15"></script>
+  <script src="ai.js?v=15"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>
