@@ -291,6 +291,7 @@ class BerryGameInstance {
     this.config = JSON.parse(JSON.stringify(gameConfig));
     this.charObj = characterObj || window.BERRY_DATA.characters[0];
     this.isPreview = options.isPreview || false;
+    this.ghostFriend = options.ghostFriend || null;
     this.onScoreChange = options.onScoreChange || (() => {});
     this.onCoinEarned = options.onCoinEarned || (() => {});
     this.onVerified = options.onVerified || (() => {});
@@ -3667,6 +3668,103 @@ class BerryGameInstance {
         ctx.arc(pxScreen + 10, pyScreen + 16 + ((this.tick + 3) % 6), 5, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+
+    // ==================== LIVE FRIEND GHOST & CLEAR CHALLENGE PROGRESS BAR ====================
+    if (this.ghostFriend && !this.isPreview && this.crashFreezeTimer <= 0) {
+      const gf = this.ghostFriend;
+      const goal = Math.max(10, gf.targetScore || 100);
+      // Ghost progresses steadily toward its targetScore, or paces relative to your score!
+      const ghostScore = Math.min(goal, Math.floor((this.tick / 35) * (goal / 18)));
+      const scoreDiff = goal - this.score;
+
+      // Position the Friend's Ghost relative to the player based on whether you are behind or ahead of their score!
+      let gx = pxScreen + Math.max(-140, Math.min(220, scoreDiff * 1.8)) + Math.sin(this.tick * 0.06) * 18;
+      let gy = pyScreen - 10 + Math.cos(this.tick * 0.09) * 14;
+      if (eng === "dont_look_down") {
+        gx = W * 0.5 + Math.sin(this.tick * 0.05) * 110;
+        gy = pyScreen - Math.max(-120, Math.min(160, scoreDiff * 1.4));
+      } else if (eng === "slope_3d" || (eng === "custom_template" && this.config.templateStyle === "back_3d_race")) {
+        gx = W * 0.5 + Math.sin(this.tick * 0.055) * 120;
+        gy = pyScreen - Math.max(-40, Math.min(150, scoreDiff * 1.2));
+      }
+      gx = Math.max(48, Math.min(W - 48, gx));
+      gy = Math.max(68, Math.min(H - 48, gy));
+
+      // Draw Glowing Translucent Ghost Aura + Friend's Cute Chubby Character
+      ctx.save();
+      ctx.globalAlpha = 0.68;
+      ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(gx, gy, 24 + Math.sin(this.tick * 0.12) * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      window.drawChubbyCharacter(ctx, gx, gy, 17, gf.charObj || window.BERRY_DATA.characters[1], {
+        time: this.tick * 0.06
+      });
+      ctx.restore();
+
+      // Floating Ghost Name Tag above Friend Ghost
+      ctx.save();
+      ctx.fillStyle = "rgba(10, 15, 29, 0.82)";
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(gx - 58, gy - 44, 116, 20, 99);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#bae6fd";
+      ctx.font = "800 11px 'Fredoka'";
+      ctx.textAlign = "center";
+      ctx.fillText(`👻 ${gf.handle} (${ Math.max(ghostScore, goal) })`, gx, gy - 30);
+      ctx.restore();
+
+      // Top-Center Challenge Progress Bar + Clear +50 Coin Prize Banner!
+      const progRatio = Math.min(1, this.score / goal);
+      const won = gf.completed || this.score >= goal;
+      const hudW = 390;
+      const hudX = W * 0.5 - hudW * 0.5;
+
+      ctx.save();
+      ctx.fillStyle = "rgba(10, 15, 29, 0.88)";
+      ctx.strokeStyle = won ? "#22c55e" : "#38bdf8";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(hudX, 10, hudW, 44, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "800 12px 'Fredoka'";
+      ctx.textAlign = "left";
+      ctx.fillText(
+        won
+          ? `🏆 BEAT ${gf.handle.toUpperCase()}'S GHOST! (${this.score}/${goal})`
+          : `👻 RACING ${gf.handle.toUpperCase()}'S GHOST: ${this.score} / ${goal} pts`,
+        hudX + 12,
+        27
+      );
+
+      // Clear Coin Prize Badge on Right
+      ctx.fillStyle = won ? "#22c55e" : "#facc15";
+      ctx.font = "800 12px 'Fredoka'";
+      ctx.textAlign = "right";
+      ctx.fillText(won ? "✅ +50 🪙 WON!" : "🎁 PRIZE: +50 🪙", hudX + hudW - 12, 27);
+
+      // Progress Bar Track
+      ctx.fillStyle = "#1e293b";
+      ctx.beginPath();
+      ctx.roundRect(hudX + 12, 34, hudW - 24, 10, 99);
+      ctx.fill();
+
+      ctx.fillStyle = won ? "#22c55e" : "#38bdf8";
+      ctx.beginPath();
+      ctx.roundRect(hudX + 12, 34, Math.max(10, (hudW - 24) * progRatio), 10, 99);
+      ctx.fill();
+      ctx.restore();
     }
 
     // Universal Rising Lava Floor (`FloorIsLava`)

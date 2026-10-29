@@ -72,45 +72,55 @@
 
     <!-- MAIN CONTENT STAGE -->
     <main class="main-stage">
-      <!-- ==================== TAB 1: FOR YOU (4 CLEAN ROWS) ==================== -->
+      <!-- ==================== TAB 1: FOR YOU (WITH LIVE LEADERBOARD BAR + 4 CLEAN ROWS) ==================== -->
       <section class="tab-view active" id="tab-foryou">
+        <!-- Frequent Leaderboard Strip on Home Screen (Real Players Only — Zero Fake Friends!) -->
+        <div id="homeLeaderboardStrip" class="studio-box" style="margin-bottom:14px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:linear-gradient(90deg,#ffffff,#f0f7ff);"></div>
         <div class="feed-rows-container" id="feedRowsContainer"></div>
       </section>
 
-      <!-- ==================== TAB 2: FRIENDS & CHALLENGES (WORKING!) ==================== -->
+      <!-- ==================== TAB 2: FRIENDS MANAGER, GHOST RACES & LEADERBOARD ==================== -->
       <section class="tab-view" id="tab-friends">
-        <div class="clean-center-card" style="max-width:680px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-            <div>
-              <h2>Friends & Score Challenges</h2>
-              <p class="muted-line" style="margin:2px 0 0;">Your Friend Code: <strong id="myFriendCodeDisplay" style="color:#1d6ff2;">BERRY-BYRON</strong></p>
+        <div class="shop-view-grid" style="grid-template-columns: 1.15fr 0.85fr;">
+          <!-- Left: Easy Add & Manage Friends + Ghost Challenges -->
+          <div class="shop-panel" style="overflow-y:auto;">
+            <div class="shop-header" style="margin-bottom:6px;">
+              <h2>👥 Manage Friends & Ghost Races</h2>
+              <span class="badge-pill" style="background:#fef9c3;color:#854d0e;">🎁 Beat Ghost Prize: +50 🪙</span>
             </div>
-            <button class="outline-btn" id="copyFriendCodeBtn" style="font-size:0.78rem;">📋 Copy My Share Code</button>
-          </div>
-
-          <div class="add-friend-row">
-            <input type="text" id="friendCodeInput" placeholder="Paste a friend's Share Code or Friend Code (e.g. BERRY-ALEX)..." />
-            <button class="primary-btn" id="addFriendBtn">Add Friend</button>
-          </div>
-
-          <!-- Send a Score Challenge to Friends -->
-          <div class="studio-box" style="margin-bottom:14px;background:#f8fbff;">
-            <div class="box-head">
-              <strong>⚔️ Create a Score Challenge for a Friend</strong>
-              <span class="badge-pill">Win +150 🪙</span>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
-              <select id="challengeGameSelect" class="clean-select" style="flex:1;min-width:170px;"></select>
-              <input type="number" id="challengeScoreInput" class="clean-input" value="250" min="10" style="width:110px;" placeholder="Target Score" />
-              <button class="primary-btn" id="createChallengeBtn" style="padding:8px 14px;font-size:0.8rem;">🔗 Copy Challenge Code</button>
-            </div>
-            <p style="font-size:0.73rem;color:#475569;font-weight:700;margin-top:6px;">
-              Send the copied code to a friend! When they paste it in "Add Friend" above, they can play to beat your score!
+            <p class="muted-line" style="margin:0 0 12px;font-size:0.8rem;">
+              Type a friend's username below to add them, manage your friends list, and race their <strong>👻 Live Ghost</strong> inside any game to win <strong>+50 🪙 Coins</strong>!
             </p>
+
+            <!-- Super Simple Add Friend by Username -->
+            <div class="add-friend-row" style="margin-bottom:10px;">
+              <input type="text" id="friendCodeInput" placeholder="Enter friend's username (e.g. Alex)..." />
+              <button class="primary-btn" id="addFriendBtn">➕ Add Friend</button>
+            </div>
+
+            <!-- 1-Click Quick Add from Accounts on this Device -->
+            <div id="quickAddAccountsBar" style="margin-bottom:12px;"></div>
+
+            <!-- Friends List with Manage Controls (Pin, Pick Game, Race Ghost, Remove) -->
+            <div id="friendsListContainer" class="empty-state-box" style="flex:1;overflow-y:auto;padding:14px;">
+              <!-- Honest empty state when 0 friends -->
+            </div>
           </div>
 
-          <div id="friendsListContainer" class="empty-state-box">
-            <!-- Honest empty state when 0 friends, or list of friends + playable challenges -->
+          <!-- Right: Live Friends & Players Leaderboard (Zero Fake Friends!) -->
+          <div class="mixer-panel" style="overflow-y:auto;">
+            <div class="shop-header" style="margin-bottom:8px;">
+              <h2>🏆 Leaderboard</h2>
+              <span class="badge-pill">Real Players Only</span>
+            </div>
+            <p class="muted-line" style="margin:0 0 10px;font-size:0.78rem;">
+              Compete with your real friends! Switch between Overall High Scores, Coins, or any specific game:
+            </p>
+            <select id="leaderboardFilterSelect" class="clean-select" style="margin-bottom:12px;">
+              <option value="overall">🏆 Overall Total High Score</option>
+              <option value="coins">🪙 Richest Coin Balance</option>
+            </select>
+            <div id="friendsLeaderboardList" style="display:flex;flex-direction:column;gap:8px;flex:1;overflow-y:auto;"></div>
           </div>
         </div>
       </section>
@@ -238,6 +248,8 @@
           <button class="close-btn" id="modalCloseBtn">✕</button>
         </div>
       </header>
+      <!-- In-Game Leaderboard & Ghost Challenge Strip -->
+      <div id="modalLeaderboardBar" style="background:#f0f7ff;border-bottom:2px solid #0a0f1d;padding:7px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:0.78rem;font-weight:800;"></div>
       <div class="play-canvas-holder">
         <canvas id="modalCanvas" width="880" height="500"></canvas>
       </div>
@@ -282,9 +294,9 @@
 
   <div class="toast hidden" id="toastBox"></div>
 
-  <script src="data.js?v=15"></script>
-  <script src="engine.js?v=15"></script>
-  <script src="ai.js?v=15"></script>
-  <script src="app.js?v=15"></script>
+  <script src="data.js?v=17"></script>
+  <script src="engine.js?v=17"></script>
+  <script src="ai.js?v=17"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
