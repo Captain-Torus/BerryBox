@@ -301,6 +301,14 @@
 
   function openPlayModal(game, challengeObj = null) {
     activeChallenge = challengeObj;
+    if (typeof window.gtag === "function") {
+      window.gtag("event", "play_game", {
+        game_id: game.id,
+        game_title: game.title,
+        username: state.username,
+        is_ghost_challenge: Boolean(challengeObj)
+      });
+    }
     state.likedCategories[game.category] = (state.likedCategories[game.category] || 10) + 2;
     state.highScores = state.highScores || {};
     saveState();
@@ -998,6 +1006,9 @@
 
   function finishLogin(msg) {
     document.getElementById("authModal").classList.add("hidden");
+    if (typeof window.gtag === "function") {
+      window.gtag("event", "login", { username: state.username });
+    }
     updateHUD();
     renderFeed();
     renderFriends();
