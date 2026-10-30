@@ -339,9 +339,16 @@ class BerryGameInstance {
     this.canvas.addEventListener("mousemove", this._mouseMove);
   }
 
-  destroy() {
+  stop() {
     this.running = false;
-    if (this.rafId) cancelAnimationFrame(this.rafId);
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+  }
+
+  destroy() {
+    this.stop();
     if (!this.isPreview) {
       window.removeEventListener("keydown", this._keyDown);
       window.removeEventListener("keyup", this._keyUp);
@@ -3493,11 +3500,42 @@ class BerryGameInstance {
 
   start() {
     if (this.running) return;
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
     this.running = true;
-    const loop = () => {
+
+    // Hardware-Independent 60.0 FPS Fixed-Timestep Loop!
+    // Guarantees identical game speed on 30Hz, 60Hz, 120Hz ProMotion, and 240Hz monitors!
+    const STEP_MS = 1000 / 60;
+    let lastTime = performance.now();
+    let accumulator = 0;
+
+    // Draw initial frame immediately
+    this.draw();
+
+    const loop = (now) => {
       if (!this.running) return;
-      this.update();
-      this.draw();
+      let delta = now - lastTime;
+      lastTime = now;
+      // Clamp delta so tab-switching or a lag spike never causes a giant jump
+      if (delta > 100) delta = 100;
+      if (delta < 0) delta = 0;
+
+      accumulator += delta;
+      let stepped = false;
+      let maxSteps = 4;
+      while (accumulator >= STEP_MS && maxSteps > 0) {
+        this.update();
+        accumulator -= STEP_MS;
+        stepped = true;
+        maxSteps--;
+      }
+
+      if (stepped || this.aiBuildingAnimation) {
+        this.draw();
+      }
       this.rafId = requestAnimationFrame(loop);
     };
     this.rafId = requestAnimationFrame(loop);

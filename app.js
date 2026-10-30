@@ -323,6 +323,14 @@
 
     renderModalLeaderboard(game);
 
+    // Stop any background hover or studio canvas loops so 100% of CPU goes to the game!
+    if (hoverInstance) {
+      hoverInstance.destroy();
+      hoverInstance = null;
+    }
+    if (studioInstance) {
+      studioInstance.stop();
+    }
     if (modalInstance) modalInstance.destroy();
     const canvas = document.getElementById("modalCanvas");
 
@@ -1022,7 +1030,7 @@
 
     if (studioInstance) {
       if (tabId === "create") studioInstance.start();
-      else studioInstance.running = false;
+      else studioInstance.stop();
     }
 
     if (tabId === "foryou") renderFeed();
