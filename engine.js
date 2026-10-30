@@ -291,6 +291,7 @@ class BerryGameInstance {
     this.config = JSON.parse(JSON.stringify(gameConfig));
     this.charObj = characterObj || window.BERRY_DATA.characters[0];
     this.isPreview = options.isPreview || false;
+    this.twoPlayerMode = options.twoPlayerMode || false;
     this.ghostFriend = options.ghostFriend || null;
     this.onScoreChange = options.onScoreChange || (() => {});
     this.onCoinEarned = options.onCoinEarned || (() => {});
@@ -422,6 +423,9 @@ class BerryGameInstance {
     else if (eng === "dont_look_down") this.initDontLookDown(W, H);
     else if (eng === "geometry_dash") this.initGeometryDash(W, H);
     else if (eng === "basket_random") this.initBasketRandom(W, H);
+    else if (eng === "soccer_random") this.initSoccerRandom(W, H);
+    else if (eng === "volley_random") this.initVolleyRandom(W, H);
+    else if (eng === "snowbrawl") this.initSnowbrawl(W, H);
     else if (eng === "escape_road") this.initEscapeRoad(W, H);
     else if (eng === "stickman_hook") this.initStickmanHook(W, H);
     else if (eng === "rooftop_snipers") this.initRooftopSnipers(W, H);
@@ -2283,7 +2287,7 @@ class BerryGameInstance {
     this.player.y = this.floorY - 22;
     this.player.vx = 0;
     this.player.vy = 0;
-    this.cpu = { x: W * 0.75, y: this.floorY - 22, vx: 0, vy: 0, angle: 0, shootCooldown: 0 };
+    this.cpu = { x: W * 0.75, y: this.floorY - 22, vx: 0, vy: 0, angle: 0, onGround: true, shootCooldown: 0 };
     this.ball = { x: W * 0.5, y: 120, vx: (Math.random() - 0.5) * 3, vy: -2, r: 14, scoreCooldown: 0 };
   }
 
@@ -2297,8 +2301,12 @@ class BerryGameInstance {
     p.angle = Math.sin(this.tick * 0.08) * 0.3;
     c.angle = -Math.sin(this.tick * 0.085) * 0.3;
 
-    if (inp.left) p.vx = -4.5;
-    else if (inp.right) p.vx = 4.5;
+    const p1Left  = this.twoPlayerMode ? this.keys["KeyA"] : inp.left;
+    const p1Right = this.twoPlayerMode ? this.keys["KeyD"] : inp.right;
+    const p1Shoot = this.twoPlayerMode ? (this.keys["KeyW"] || this.keys["Space"]) : (inp.up || this.isPreview);
+
+    if (p1Left) p.vx = -4.6;
+    else if (p1Right) p.vx = 4.6;
     else p.vx = Math.sin(this.tick * 0.07) * 1.8;
 
     p.vy += 0.44 * phys.gravity;
@@ -2310,17 +2318,26 @@ class BerryGameInstance {
       p.onGround = true;
     }
 
-    // Smart CPU AI: Chases the ball, jumps to contest, and shoots high arcs at the LEFT hoop (x = 42, y = H*0.42)!
-    const targetX = b.x + 12;
-    c.vx = targetX > c.x + 8 ? 3.8 : (targetX < c.x - 8 ? -3.8 : 0);
+    // Player 2 (Same Keyboard: Left/Right + Up) OR Smart CPU AI!
+    if (this.twoPlayerMode) {
+      if (this.keys["ArrowLeft"]) c.vx = -4.6;
+      else if (this.keys["ArrowRight"]) c.vx = 4.6;
+      else c.vx = -Math.sin(this.tick * 0.075) * 1.8;
+    } else {
+      const targetX = b.x + 12;
+      c.vx = targetX > c.x + 8 ? 3.9 : (targetX < c.x - 8 ? -3.9 : 0);
+    }
+
     c.vy += 0.44 * phys.gravity;
-    c.x = Math.max(60, Math.min(W - 52, c.x + c.vx));
+    c.x = Math.max(52, Math.min(W - 52, c.x + c.vx));
     c.y += c.vy;
     if (c.y >= this.floorY - 22) {
       c.y = this.floorY - 22;
       c.vy = 0;
-      if (Math.abs(b.x - c.x) < 95 && b.y < c.y - 10 && this.tick % 28 === 0) {
+      c.onGround = true;
+      if (!this.twoPlayerMode && Math.abs(b.x - c.x) < 95 && b.y < c.y - 10 && this.tick % 28 === 0) {
         c.vy = -11.2;
+        c.onGround = false;
       }
     }
 
@@ -2335,9 +2352,9 @@ class BerryGameInstance {
     if (b.x < 28) { b.x = 28; b.vx = Math.abs(b.vx) * 0.8; }
     if (b.x > W - 28) { b.x = W - 28; b.vx = -Math.abs(b.vx) * 0.8; }
 
-    // Player touches / shoots ball toward RIGHT Hoop (x = W - 52, y = H * 0.42)
+    // Player 1 touches / shoots ball toward RIGHT Hoop (x = W - 52, y = H * 0.42)
     if (Math.hypot(p.x - b.x, p.y - b.y) < 38) {
-      if (inp.up || this.isPreview) {
+      if (p1Shoot) {
         const dx = (W - 55) - b.x;
         b.vx = Math.max(5.5, Math.min(11, dx * 0.019));
         b.vy = -10.8;
@@ -2348,22 +2365,22 @@ class BerryGameInstance {
       }
     }
 
-    // CPU touches & shoots ball toward YOUR LEFT Hoop (x = 52, y = H * 0.42)!
+    // Player 2 / CPU touches & shoots ball toward LEFT Hoop (x = 52, y = H * 0.42)!
     if (Math.hypot(c.x - b.x, c.y - b.y) < 38 && c.shootCooldown <= 0) {
       const distToLeftHoop = b.x - 55;
       b.vx = -Math.max(5.8, Math.min(11.2, distToLeftHoop * 0.02));
       b.vy = -10.6;
-      c.shootCooldown = 22;
+      c.shootCooldown = 18;
       window.berrySound.play("jump");
     }
 
-    // Check if Player Scored in RIGHT Hoop!
+    // Check if Player 1 Scored in RIGHT Hoop!
     if (b.scoreCooldown <= 0 && b.x > W - 78 && b.x < W - 30 && Math.abs(b.y - H * 0.42) < 26 && b.vy > 0) {
       this.myPts++;
       this.addScore(10);
       b.scoreCooldown = 50;
       window.berrySound.play("score");
-      this.popups.push({ text: `🏀 YOU SCORED! (${this.myPts} - ${this.cpuPts})`, y: 78, life: 55 });
+      this.popups.push({ text: `🏀 ${this.twoPlayerMode ? "P1" : "YOU"} SCORED! (${this.myPts} - ${this.cpuPts})`, y: 78, life: 55 });
 
       if (this.myPts >= 5) {
         this.awardCoins(3, "WON MATCH 5pts!");
@@ -2375,18 +2392,18 @@ class BerryGameInstance {
       this.resetBasketRound(W);
     }
 
-    // Check if CPU Scored in LEFT Hoop!
+    // Check if P2 / CPU Scored in LEFT Hoop!
     if (b.scoreCooldown <= 0 && b.x > 30 && b.x < 78 && Math.abs(b.y - H * 0.42) < 26 && b.vy > 0) {
       this.cpuPts++;
       b.scoreCooldown = 50;
       window.berrySound.play("boom");
-      this.popups.push({ text: `🚨 CPU SCORED! (${this.myPts} - ${this.cpuPts})`, y: 78, life: 55 });
+      this.popups.push({ text: `🚨 ${this.twoPlayerMode ? "P2" : "CPU"} SCORED! (${this.myPts} - ${this.cpuPts})`, y: 78, life: 55 });
 
       if (this.cpuPts >= 5) {
         this.myPts = 0;
         this.cpuPts = 0;
         this.basketArenaIndex = (this.basketArenaIndex + 1) % 5;
-        this.popups.push({ text: "🏟️ CPU REACHED 5! ARENA CHANGED!", y: 105, life: 75 });
+        this.popups.push({ text: `🏟️ ${this.twoPlayerMode ? "P2" : "CPU"} REACHED 5! ARENA CHANGED!`, y: 105, life: 75 });
       }
       this.resetBasketRound(W);
     }
@@ -2447,6 +2464,8 @@ class BerryGameInstance {
     });
 
     // BIG CENTER SCOREBOARD (First to 5 Wins & Changes Arena!)
+    const rightLabel = this.twoPlayerMode ? "P2" : "CPU";
+    const leftLabel = this.twoPlayerMode ? "P1" : "YOU";
     ctx.fillStyle = "#0a0f1d";
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 3;
@@ -2458,7 +2477,7 @@ class BerryGameInstance {
     ctx.fillStyle = "#ffffff";
     ctx.font = "800 18px 'Fredoka'";
     ctx.textAlign = "center";
-    ctx.fillText(`YOU  ${this.myPts}  —  ${this.cpuPts}  CPU`, W * 0.5, 34);
+    ctx.fillText(`${leftLabel}  ${this.myPts}  —  ${this.cpuPts}  ${rightLabel}`, W * 0.5, 34);
     ctx.fillStyle = "#38bdf8";
     ctx.font = "700 11px 'Plus Jakarta Sans'";
     ctx.fillText(`${ar.name} • First to 5 Changes Court`, W * 0.5, 51);
@@ -2474,6 +2493,729 @@ class BerryGameInstance {
     ctx.arc(this.ball.x, this.ball.y, this.ball.r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+  }
+
+  // ==================== 4B. SOCCER RANDOM (BUILT LIKE BASKET RANDOM!) ====================
+  // Two big Soccer Goals, wobbling physics bicycle-kickers, random ball modifier every goal, 1P or 2P!
+  initSoccerRandom(W, H) {
+    this.floorY = H - 50;
+    this.myPts = 0;
+    this.cpuPts = 0;
+    this.soccerModIndex = 0;
+    this.resetSoccerRound(W);
+  }
+
+  resetSoccerRound(W) {
+    const mods = [
+      { name: "⚽ Classic Match Ball", r: 16, bounce: 0.84, grav: 0.36, color: "#ffffff", patches: "#0a0f1d" },
+      { name: "🏖️ Giant Beach Ball!",  r: 26, bounce: 0.94, grav: 0.22, color: "#f43f5e", patches: "#facc15" },
+      { name: "🎳 Heavy Bowling Ball", r: 15, bounce: 0.55, grav: 0.58, color: "#1e293b", patches: "#38bdf8" },
+      { name: "⚡ Hyper Bouncy Ball!",  r: 14, bounce: 1.04, grav: 0.34, color: "#a855f7", patches: "#fef08a" },
+      { name: "🪙 Golden Trophy Ball", r: 18, bounce: 0.88, grav: 0.35, color: "#facc15", patches: "#b45309" }
+    ];
+    this.soccerMod = mods[this.soccerModIndex % mods.length];
+    this.player.x = W * 0.25;
+    this.player.y = this.floorY - 22;
+    this.player.vx = 0;
+    this.player.vy = 0;
+    this.cpu = { x: W * 0.75, y: this.floorY - 22, vx: 0, vy: 0, angle: 0, onGround: true, kickCooldown: 0 };
+    this.ball = {
+      x: W * 0.5,
+      y: 110,
+      vx: (Math.random() - 0.5) * 3,
+      vy: -2,
+      r: this.soccerMod.r,
+      angle: 0,
+      scoreCooldown: 0
+    };
+  }
+
+  updateSoccerRandom(W, H, inp, phys) {
+    const p = this.player;
+    const c = this.cpu;
+    const b = this.ball;
+    const mod = this.soccerMod;
+    if (b.scoreCooldown > 0) b.scoreCooldown--;
+    if (c.kickCooldown > 0) c.kickCooldown--;
+
+    // Funny wobbling soccer stance + bicycle kick lean in air!
+    p.angle = p.onGround ? Math.sin(this.tick * 0.09) * 0.28 : -0.55;
+    c.angle = c.onGround ? -Math.sin(this.tick * 0.095) * 0.28 : 0.55;
+
+    const p1Left  = this.twoPlayerMode ? this.keys["KeyA"] : inp.left;
+    const p1Right = this.twoPlayerMode ? this.keys["KeyD"] : inp.right;
+    const p1Kick  = this.twoPlayerMode ? (this.keys["KeyW"] || this.keys["Space"]) : (inp.up || this.isPreview);
+
+    if (p1Left) p.vx = -4.8;
+    else if (p1Right) p.vx = 4.8;
+    else p.vx = Math.sin(this.tick * 0.075) * 1.9;
+
+    p.vy += 0.44 * phys.gravity;
+    p.x = Math.max(58, Math.min(W - 58, p.x + p.vx));
+    p.y += p.vy;
+    if (p.y >= this.floorY - 22) {
+      p.y = this.floorY - 22;
+      p.vy = 0;
+      p.onGround = true;
+    }
+
+    // Player 2 or Smart CPU Kicker
+    if (this.twoPlayerMode) {
+      if (this.keys["ArrowLeft"]) c.vx = -4.8;
+      else if (this.keys["ArrowRight"]) c.vx = 4.8;
+      else c.vx = -Math.sin(this.tick * 0.08) * 1.9;
+    } else {
+      const targetX = b.x + 18;
+      c.vx = targetX > c.x + 8 ? 4.1 : (targetX < c.x - 8 ? -4.1 : 0);
+    }
+
+    c.vy += 0.44 * phys.gravity;
+    c.x = Math.max(58, Math.min(W - 58, c.x + c.vx));
+    c.y += c.vy;
+    if (c.y >= this.floorY - 22) {
+      c.y = this.floorY - 22;
+      c.vy = 0;
+      c.onGround = true;
+      if (!this.twoPlayerMode && Math.abs(b.x - c.x) < 92 && this.tick % 24 === 0) {
+        c.vy = -11.0;
+        c.onGround = false;
+      }
+    }
+
+    // Ball Physics
+    const goalTopY = this.floorY - 128;
+    b.vy += mod.grav * phys.gravity;
+    b.x += b.vx;
+    b.y += b.vy;
+    b.angle += b.vx * 0.05;
+
+    if (b.y > this.floorY - b.r) {
+      b.y = this.floorY - b.r;
+      b.vy *= -mod.bounce;
+      b.vx *= 0.985;
+    }
+    if (b.y < b.r + 12) {
+      b.y = b.r + 12;
+      b.vy = Math.abs(b.vy) * 0.8;
+    }
+
+    // Crossbar bounce at y = goalTopY for Left (x < 56) & Right (x > W - 56) goals!
+    if ((b.x < 62 || b.x > W - 62) && Math.abs(b.y - goalTopY) < b.r + 6) {
+      b.vy = -Math.abs(b.vy) - 3;
+      b.vx *= -0.7;
+      window.berrySound.play("jump");
+    }
+
+    // Side wall bounce ABOVE the goal crossbar
+    if (b.y < goalTopY) {
+      if (b.x < 24 + b.r) { b.x = 24 + b.r; b.vx = Math.abs(b.vx) * 0.85; }
+      if (b.x > W - 24 - b.r) { b.x = W - 24 - b.r; b.vx = -Math.abs(b.vx) * 0.85; }
+    }
+
+    // Player 1 Kicks Ball toward RIGHT Goal!
+    if (Math.hypot(p.x - b.x, p.y - b.y) < 22 + b.r) {
+      b.vx = p1Kick ? 10.6 : 6.8;
+      b.vy = p1Kick ? -8.4 : -5.2;
+      window.berrySound.play("jump");
+    }
+
+    // Player 2 / CPU Kicks Ball toward LEFT Goal!
+    if (Math.hypot(c.x - b.x, c.y - b.y) < 22 + b.r && c.kickCooldown <= 0) {
+      b.vx = -9.8;
+      b.vy = -7.8;
+      c.kickCooldown = 14;
+      window.berrySound.play("jump");
+    }
+
+    // Check RIGHT GOAL (Player 1 Scores!)
+    if (b.scoreCooldown <= 0 && b.x > W - 44 && b.y > goalTopY) {
+      this.myPts++;
+      this.addScore(10);
+      b.scoreCooldown = 50;
+      this.soccerModIndex++;
+      window.berrySound.play("score");
+      this.popups.push({ text: `⚽ GOOOAAAL! (${this.myPts} - ${this.cpuPts})`, y: 80, life: 55 });
+
+      if (this.myPts >= 5) {
+        this.awardCoins(3, "WON SOCCER 5-0!");
+        this.myPts = 0;
+        this.cpuPts = 0;
+        this.basketArenaIndex = (this.basketArenaIndex + 1) % 5;
+        this.popups.push({ text: "🏆 5 GOALS! NEW STADIUM UNLOCKED!", y: 108, life: 75 });
+      }
+      this.resetSoccerRound(W);
+    }
+
+    // Check LEFT GOAL (CPU / P2 Scores!)
+    if (b.scoreCooldown <= 0 && b.x < 44 && b.y > goalTopY) {
+      this.cpuPts++;
+      b.scoreCooldown = 50;
+      this.soccerModIndex++;
+      window.berrySound.play("boom");
+      this.popups.push({ text: `🚨 ${this.twoPlayerMode ? "P2" : "CPU"} GOAL! (${this.myPts} - ${this.cpuPts})`, y: 80, life: 55 });
+
+      if (this.cpuPts >= 5) {
+        this.myPts = 0;
+        this.cpuPts = 0;
+        this.basketArenaIndex = (this.basketArenaIndex + 1) % 5;
+        this.popups.push({ text: "🏟️ 5 GOALS! STADIUM CHANGED!", y: 108, life: 75 });
+      }
+      this.resetSoccerRound(W);
+    }
+  }
+
+  drawSoccerRandom(ctx, W, H) {
+    const stadiums = [
+      { name: "Champions Turf",   skyTop: "#0284c7", skyBot: "#bae6fd", grass1: "#16a34a", grass2: "#15803d" },
+      { name: "Rio Sunset Pitch", skyTop: "#7e22ce", skyBot: "#fb923c", grass1: "#ca8a04", grass2: "#a16207" },
+      { name: "Snowy Ice Cup",    skyTop: "#38bdf8", skyBot: "#f0f9ff", grass1: "#7dd3fc", grass2: "#38bdf8" },
+      { name: "Neon Night Final", skyTop: "#090d16", skyBot: "#1e1b4b", grass1: "#059669", grass2: "#047857" },
+      { name: "Royal Gold Arena", skyTop: "#450a0a", skyBot: "#991b1b", grass1: "#16a34a", grass2: "#14532d" }
+    ];
+    const st = stadiums[this.basketArenaIndex % stadiums.length];
+
+    const grad = ctx.createLinearGradient(0, 0, 0, this.floorY);
+    grad.addColorStop(0, st.skyTop);
+    grad.addColorStop(1, st.skyBot);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, this.floorY);
+
+    // Striped Soccer Turf
+    const numStripes = 12;
+    const sw = W / numStripes;
+    for (let i = 0; i < numStripes; i++) {
+      ctx.fillStyle = i % 2 === 0 ? st.grass1 : st.grass2;
+      ctx.fillRect(i * sw, this.floorY, sw + 1, H - this.floorY);
+    }
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, this.floorY);
+    ctx.lineTo(W, this.floorY);
+    ctx.stroke();
+
+    // Left & Right Soccer Goals with Crossbars & Nets!
+    const goalTopY = this.floorY - 128;
+    [
+      { x: 6, w: 48, postX: 54 },
+      { x: W - 54, w: 48, postX: W - 54 }
+    ].forEach(g => {
+      // Net mesh
+      ctx.fillStyle = "rgba(255, 255, 255, 0.24)";
+      ctx.fillRect(g.x, goalTopY, g.w, 128);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+      ctx.lineWidth = 1.5;
+      for (let nx = g.x; nx <= g.x + g.w; nx += 10) {
+        ctx.beginPath(); ctx.moveTo(nx, goalTopY); ctx.lineTo(nx, this.floorY); ctx.stroke();
+      }
+      for (let ny = goalTopY; ny <= this.floorY; ny += 12) {
+        ctx.beginPath(); ctx.moveTo(g.x, ny); ctx.lineTo(g.x + g.w, ny); ctx.stroke();
+      }
+      // White Goal Posts & Crossbar
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 6;
+      ctx.strokeRect(g.x, goalTopY, g.w, 128);
+    });
+
+    // Center Scoreboard + Active Ball Modifier
+    const leftLabel = this.twoPlayerMode ? "P1" : "YOU";
+    const rightLabel = this.twoPlayerMode ? "P2" : "CPU";
+    ctx.fillStyle = "#0a0f1d";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(W * 0.5 - 135, 12, 270, 50, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 18px 'Fredoka'";
+    ctx.textAlign = "center";
+    ctx.fillText(`⚽ ${leftLabel}  ${this.myPts}  —  ${this.cpuPts}  ${rightLabel}`, W * 0.5, 34);
+    ctx.fillStyle = "#4ade80";
+    ctx.font = "700 11px 'Plus Jakarta Sans'";
+    ctx.fillText(`${this.soccerMod.name} • First to 5 Wins`, W * 0.5, 52);
+
+    // Players
+    window.drawChubbyCharacter(ctx, this.player.x, this.player.y, 20, this.charObj, { angle: this.player.angle });
+    window.drawChubbyCharacter(ctx, this.cpu.x, this.cpu.y, 20, window.BERRY_DATA.characters[8], { angle: this.cpu.angle });
+
+    // Soccer Ball
+    ctx.save();
+    ctx.translate(this.ball.x, this.ball.y);
+    ctx.rotate(this.ball.angle);
+    ctx.fillStyle = this.soccerMod.color;
+    ctx.strokeStyle = "#0a0f1d";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.ball.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = this.soccerMod.patches;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * (this.ball.r * 0.52), Math.sin(a) * (this.ball.r * 0.52), this.ball.r * 0.24, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ==================== 4C. VOLLEY RANDOM (BERRY SMASH VOLLEYBALL!) ====================
+  // High center net, diving/spiking chubby characters, random court modifier every point!
+  initVolleyRandom(W, H) {
+    this.floorY = H - 50;
+    this.myPts = 0;
+    this.cpuPts = 0;
+    this.volleyModIndex = 0;
+    this.resetVolleyRound(W, 1);
+  }
+
+  resetVolleyRound(W, serverDir = 1) {
+    const mods = [
+      { name: "🏐 Classic Beach Volley", r: 17, grav: 0.28, netH: 118, color: "#fef08a" },
+      { name: "🦖 Giant Mega Volleyball!", r: 28, grav: 0.22, netH: 118, color: "#f472b6" },
+      { name: "🌙 Low-Grav Moon Volley",  r: 17, grav: 0.16, netH: 135, color: "#38bdf8" },
+      { name: "⚡ Turbo Speed Volley",    r: 15, grav: 0.36, netH: 100, color: "#fb923c" }
+    ];
+    this.volleyMod = mods[this.volleyModIndex % mods.length];
+    this.player.x = W * 0.24;
+    this.player.y = this.floorY - 22;
+    this.player.vx = 0;
+    this.player.vy = 0;
+    this.cpu = { x: W * 0.76, y: this.floorY - 22, vx: 0, vy: 0, angle: 0, onGround: true };
+    this.ball = {
+      x: serverDir > 0 ? W * 0.28 : W * 0.72,
+      y: 120,
+      vx: serverDir * 3.5,
+      vy: -4,
+      r: this.volleyMod.r,
+      scoreCooldown: 0
+    };
+  }
+
+  updateVolleyRandom(W, H, inp, phys) {
+    const p = this.player;
+    const c = this.cpu;
+    const b = this.ball;
+    const mod = this.volleyMod;
+    const netX = W * 0.5;
+    const netTopY = this.floorY - mod.netH;
+    if (b.scoreCooldown > 0) b.scoreCooldown--;
+
+    p.angle = Math.sin(this.tick * 0.08) * 0.22;
+    c.angle = -Math.sin(this.tick * 0.085) * 0.22;
+
+    const p1Left  = this.twoPlayerMode ? this.keys["KeyA"] : inp.left;
+    const p1Right = this.twoPlayerMode ? this.keys["KeyD"] : inp.right;
+
+    if (p1Left) p.vx = -5.0;
+    else if (p1Right) p.vx = 5.0;
+    else p.vx *= 0.82;
+
+    p.vy += 0.44 * phys.gravity;
+    p.x = Math.max(40, Math.min(netX - 28, p.x + p.vx));
+    p.y += p.vy;
+    if (p.y >= this.floorY - 22) {
+      p.y = this.floorY - 22;
+      p.vy = 0;
+      p.onGround = true;
+    }
+
+    // Player 2 or Smart Volleyball CPU on Right Half
+    if (this.twoPlayerMode) {
+      if (this.keys["ArrowLeft"]) c.vx = -5.0;
+      else if (this.keys["ArrowRight"]) c.vx = 5.0;
+      else c.vx *= 0.82;
+    } else {
+      const targetX = b.x > netX - 30 ? Math.max(netX + 32, b.x + 8) : W * 0.75;
+      c.vx = targetX > c.x + 6 ? 4.4 : (targetX < c.x - 6 ? -4.4 : 0);
+    }
+
+    c.vy += 0.44 * phys.gravity;
+    c.x = Math.max(netX + 28, Math.min(W - 40, c.x + c.vx));
+    c.y += c.vy;
+    if (c.y >= this.floorY - 22) {
+      c.y = this.floorY - 22;
+      c.vy = 0;
+      c.onGround = true;
+      if (!this.twoPlayerMode && b.x > netX - 15 && Math.abs(b.x - c.x) < 78 && b.y < c.y - 8) {
+        c.vy = -11.4;
+        c.onGround = false;
+      }
+    }
+
+    // Ball Physics
+    b.vy += mod.grav * phys.gravity;
+    b.x += b.vx;
+    b.y += b.vy;
+
+    if (b.x < 24 + b.r) { b.x = 24 + b.r; b.vx = Math.abs(b.vx) * 0.9; }
+    if (b.x > W - 24 - b.r) { b.x = W - 24 - b.r; b.vx = -Math.abs(b.vx) * 0.9; }
+    if (b.y < 20 + b.r) { b.y = 20 + b.r; b.vy = Math.abs(b.vy) * 0.85; }
+
+    // Center Net Collision
+    if (Math.abs(b.x - netX) < b.r + 7 && b.y > netTopY) {
+      if (b.y < netTopY + 14) {
+        b.vy = -Math.abs(b.vy) - 2;
+        b.y = netTopY - b.r;
+      } else {
+        b.vx = b.x < netX ? -Math.abs(b.vx) * 0.85 : Math.abs(b.vx) * 0.85;
+      }
+    }
+
+    // Player 1 hits / spikes ball over the net to the RIGHT!
+    if (Math.hypot(p.x - b.x, p.y - b.y) < 22 + b.r) {
+      b.vx = 6.2 + Math.random() * 2.5;
+      b.vy = p.onGround ? -9.6 : -7.2; // Jump-spike hits a sharper trajectory!
+      window.berrySound.play("jump");
+    }
+
+    // Player 2 / CPU hits ball over the net to the LEFT!
+    if (Math.hypot(c.x - b.x, c.y - b.y) < 22 + b.r) {
+      b.vx = -(6.2 + Math.random() * 2.5);
+      b.vy = c.onGround ? -9.6 : -7.4;
+      window.berrySound.play("jump");
+    }
+
+    // Check if Ball Hit the Floor!
+    if (b.scoreCooldown <= 0 && b.y >= this.floorY - b.r) {
+      b.scoreCooldown = 45;
+      this.volleyModIndex++;
+      if (b.x > netX) {
+        // Landed on CPU/P2's floor -> Player 1 Scores!
+        this.myPts++;
+        this.addScore(10);
+        window.berrySound.play("score");
+        this.popups.push({ text: `🏐 SPIKE POINT! (${this.myPts} - ${this.cpuPts})`, y: 80, life: 55 });
+        if (this.myPts >= 5) {
+          this.awardCoins(3, "WON VOLLEY 5pts!");
+          this.myPts = 0;
+          this.cpuPts = 0;
+          this.basketArenaIndex = (this.basketArenaIndex + 1) % 5;
+          this.popups.push({ text: "🏖️ 5 POINTS! NEW BEACH COURT!", y: 108, life: 75 });
+        }
+        this.resetVolleyRound(W, 1);
+      } else {
+        // Landed on Player 1's floor -> CPU/P2 Scores!
+        this.cpuPts++;
+        window.berrySound.play("boom");
+        this.popups.push({ text: `🚨 ${this.twoPlayerMode ? "P2" : "CPU"} POINT! (${this.myPts} - ${this.cpuPts})`, y: 80, life: 55 });
+        if (this.cpuPts >= 5) {
+          this.myPts = 0;
+          this.cpuPts = 0;
+          this.basketArenaIndex = (this.basketArenaIndex + 1) % 5;
+        }
+        this.resetVolleyRound(W, -1);
+      }
+    }
+  }
+
+  drawVolleyRandom(ctx, W, H) {
+    const courts = [
+      { skyTop: "#0284c7", skyBot: "#bae6fd", sand: "#fde047", net: "#ffffff" },
+      { skyTop: "#7e22ce", skyBot: "#fb923c", sand: "#fdba74", net: "#fef08a" },
+      { skyTop: "#090d16", skyBot: "#1e1b4b", sand: "#334155", net: "#22d3ee" },
+      { skyTop: "#059669", skyBot: "#a7f3d0", sand: "#fcd34d", net: "#ffffff" }
+    ];
+    const ct = courts[this.basketArenaIndex % courts.length];
+
+    const grad = ctx.createLinearGradient(0, 0, 0, this.floorY);
+    grad.addColorStop(0, ct.skyTop);
+    grad.addColorStop(1, ct.skyBot);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, this.floorY);
+
+    ctx.fillStyle = ct.sand;
+    ctx.fillRect(0, this.floorY, W, H - this.floorY);
+    ctx.strokeStyle = "#0a0f1d";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, this.floorY);
+    ctx.lineTo(W, this.floorY);
+    ctx.stroke();
+
+    // Center Volleyball Net
+    const netX = W * 0.5;
+    const netTopY = this.floorY - this.volleyMod.netH;
+    ctx.fillStyle = "#0a0f1d";
+    ctx.fillRect(netX - 4, netTopY, 8, this.volleyMod.netH);
+    ctx.fillStyle = ct.net;
+    ctx.strokeStyle = "#0a0f1d";
+    ctx.lineWidth = 2.5;
+    ctx.fillRect(netX - 7, netTopY, 14, 28);
+    ctx.strokeRect(netX - 7, netTopY, 14, 28);
+
+    // Scoreboard
+    const leftLabel = this.twoPlayerMode ? "P1" : "YOU";
+    const rightLabel = this.twoPlayerMode ? "P2" : "CPU";
+    ctx.fillStyle = "#0a0f1d";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(W * 0.5 - 135, 12, 270, 50, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 18px 'Fredoka'";
+    ctx.textAlign = "center";
+    ctx.fillText(`🏐 ${leftLabel}  ${this.myPts}  —  ${this.cpuPts}  ${rightLabel}`, W * 0.5, 34);
+    ctx.fillStyle = "#facc15";
+    ctx.font = "700 11px 'Plus Jakarta Sans'";
+    ctx.fillText(`${this.volleyMod.name} • Hit Opponent's Floor!`, W * 0.5, 52);
+
+    window.drawChubbyCharacter(ctx, this.player.x, this.player.y, 20, this.charObj, { angle: this.player.angle });
+    window.drawChubbyCharacter(ctx, this.cpu.x, this.cpu.y, 20, window.BERRY_DATA.characters[5], { angle: this.cpu.angle });
+
+    // Volleyball
+    ctx.fillStyle = this.volleyMod.color;
+    ctx.strokeStyle = "#0a0f1d";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(this.ball.x, this.ball.y, this.ball.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // ==================== 4D. SNOWBRAWL KNOCKOUT (GIMKIT-STYLE ICE ARENA!) ====================
+  // Throw Snowballs to build Knockback % and blast rivals off the icy island into the freezing water!
+  initSnowbrawl(W, H) {
+    this.waterY = H - 42;
+    this.myPts = 0;
+    this.cpuPts = 0;
+    this.snowPlatforms = [
+      { x: 95, y: H - 82, w: W - 190, h: 24 },           // Main Ice Island
+      { x: W * 0.33, y: H - 175, w: W * 0.34, h: 18 }    // Top Ice Bridge
+    ];
+    this.resetSnowbrawlRound(W, H);
+  }
+
+  resetSnowbrawlRound(W, H) {
+    this.player.x = W * 0.28;
+    this.player.y = H - 120;
+    this.player.vx = 0;
+    this.player.vy = 0;
+    this.player.jumps = 2;
+    this.player.knockPct = 0;
+    this.player.faceDir = 1;
+    this.cpu = {
+      x: W * 0.72,
+      y: H - 120,
+      vx: 0,
+      vy: 0,
+      jumps: 2,
+      onGround: false,
+      knockPct: 0,
+      faceDir: -1
+    };
+    this.projectiles = [];
+  }
+
+  fireSnowball(who) {
+    if (who === "p1") {
+      const dir = this.player.faceDir || 1;
+      this.projectiles.push({
+        x: this.player.x + dir * 22,
+        y: this.player.y - 4,
+        vx: dir * 10.5,
+        vy: -1.8,
+        r: 10,
+        owner: "p1"
+      });
+      window.berrySound.play("jump");
+    } else if (this.cpu) {
+      const dir = this.cpu.faceDir || -1;
+      this.projectiles.push({
+        x: this.cpu.x + dir * 22,
+        y: this.cpu.y - 4,
+        vx: dir * 10.2,
+        vy: -1.8,
+        r: 10,
+        owner: "p2"
+      });
+      window.berrySound.play("jump");
+    }
+  }
+
+  updateSnowbrawl(W, H, inp, phys) {
+    const p = this.player;
+    const c = this.cpu;
+
+    const p1Left  = this.twoPlayerMode ? this.keys["KeyA"] : inp.left;
+    const p1Right = this.twoPlayerMode ? this.keys["KeyD"] : inp.right;
+
+    if (p1Left) { p.vx -= 0.65; p.faceDir = -1; }
+    else if (p1Right) { p.vx += 0.65; p.faceDir = 1; }
+    else p.vx *= 0.90; // Slippery ice momentum!
+    p.vx = Math.max(-8.5, Math.min(8.5, p.vx));
+
+    // P2 or Smart Snowbrawl CPU
+    if (this.twoPlayerMode) {
+      if (this.keys["ArrowLeft"]) { c.vx -= 0.65; c.faceDir = -1; }
+      else if (this.keys["ArrowRight"]) { c.vx += 0.65; c.faceDir = 1; }
+      else c.vx *= 0.90;
+    } else {
+      const idealX = Math.max(150, Math.min(W - 150, p.x > W * 0.5 ? p.x - 140 : p.x + 140));
+      if (c.x < idealX - 10) c.vx += 0.52;
+      else if (c.x > idealX + 10) c.vx -= 0.52;
+      else c.vx *= 0.88;
+      c.faceDir = p.x < c.x ? -1 : 1;
+
+      if (c.onGround && (c.x < 135 || c.x > W - 135 || this.tick % 65 === 0)) {
+        c.vy = -11.0;
+        c.onGround = false;
+      }
+      if (this.tick % 42 === 0) {
+        this.fireSnowball("p2");
+      }
+    }
+    c.vx = Math.max(-8.5, Math.min(8.5, c.vx));
+
+    // Apply gravity & platform collisions to both fighters
+    [p, c].forEach(ent => {
+      ent.vy += 0.44 * phys.gravity;
+      ent.x += ent.vx;
+      ent.y += ent.vy;
+      ent.onGround = false;
+
+      for (const pl of this.snowPlatforms) {
+        if (
+          ent.vy >= 0 &&
+          ent.x + 14 > pl.x &&
+          ent.x - 14 < pl.x + pl.w &&
+          ent.y + 18 >= pl.y &&
+          ent.y + 18 <= pl.y + pl.h + 14
+        ) {
+          ent.y = pl.y - 18;
+          ent.vy = 0;
+          ent.onGround = true;
+          ent.jumps = 2;
+        }
+      }
+    });
+
+    // Update Snowballs & Knockback Hits!
+    for (const sb of this.projectiles) {
+      sb.x += sb.vx;
+      sb.y += sb.vy;
+      sb.vy += 0.12;
+
+      if (sb.owner === "p1" && Math.hypot(sb.x - c.x, sb.y - c.y) < sb.r + 18) {
+        c.knockPct = Math.min(200, (c.knockPct || 0) + 22);
+        const kbMult = 1 + c.knockPct / 55;
+        c.vx = Math.sign(sb.vx) * 5.2 * kbMult;
+        c.vy = -4.5 * kbMult;
+        sb.y = 9999;
+        window.berrySound.play("boom");
+      } else if (sb.owner === "p2" && Math.hypot(sb.x - p.x, sb.y - p.y) < sb.r + 18) {
+        p.knockPct = Math.min(200, (p.knockPct || 0) + 18);
+        const kbMult = 1 + p.knockPct / 60;
+        p.vx = Math.sign(sb.vx) * 4.8 * kbMult;
+        p.vy = -4.2 * kbMult;
+        sb.y = 9999;
+        window.berrySound.play("boom");
+      }
+    }
+    this.projectiles = this.projectiles.filter(sb => sb.x > -40 && sb.x < W + 40 && sb.y < H + 40);
+
+    // Check Splash Knockout in Freezing Water!
+    if (c.y > this.waterY) {
+      this.myPts++;
+      this.addScore(15);
+      window.berrySound.play("score");
+      this.popups.push({ text: `❄️ SPLASH KO! (${this.myPts} - ${this.cpuPts})`, y: 80, life: 55 });
+      if (this.myPts >= 5) {
+        this.awardCoins(3, "SNOWBRAWL CHAMP!");
+        this.myPts = 0;
+        this.cpuPts = 0;
+      }
+      this.resetSnowbrawlRound(W, H);
+    } else if (p.y > this.waterY) {
+      this.cpuPts++;
+      window.berrySound.play("boom");
+      this.popups.push({ text: `🌊 KNOCKED INTO THE WATER! (${this.myPts} - ${this.cpuPts})`, y: 80, life: 55 });
+      if (this.cpuPts >= 5) {
+        this.myPts = 0;
+        this.cpuPts = 0;
+      }
+      this.resetSnowbrawlRound(W, H);
+    }
+  }
+
+  drawSnowbrawl(ctx, W, H) {
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, "#0284c7");
+    grad.addColorStop(0.65, "#bae6fd");
+    grad.addColorStop(1, "#e0f2fe");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Falling Snowflakes
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < 24; i++) {
+      ctx.beginPath();
+      ctx.arc((i * 79 + this.tick * 0.8) % W, (i * 53 + this.tick * 1.4) % this.waterY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Icy Platforms
+    this.snowPlatforms.forEach(pl => {
+      ctx.fillStyle = "#7dd3fc";
+      ctx.strokeStyle = "#0a0f1d";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(pl.x, pl.y, pl.w, pl.h, 8);
+      ctx.fill();
+      ctx.stroke();
+      // White snow cap on top
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(pl.x + 4, pl.y + 2, pl.w - 8, 6);
+    });
+
+    // Freezing Arctic Water at Bottom
+    ctx.fillStyle = "#1d4ed8";
+    ctx.fillRect(0, this.waterY, W, H - this.waterY);
+    ctx.strokeStyle = "#93c5fd";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, this.waterY);
+    ctx.lineTo(W, this.waterY);
+    ctx.stroke();
+
+    // Scoreboard + Knockback % Meters
+    const leftLabel = this.twoPlayerMode ? "P1" : "YOU";
+    const rightLabel = this.twoPlayerMode ? "P2" : "CPU";
+    ctx.fillStyle = "#0a0f1d";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(W * 0.5 - 155, 12, 310, 50, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 17px 'Fredoka'";
+    ctx.textAlign = "center";
+    ctx.fillText(`❄️ ${leftLabel} (${this.player.knockPct || 0}%)  ${this.myPts} — ${this.cpuPts}  (${this.cpu.knockPct || 0}%) ${rightLabel}`, W * 0.5, 34);
+    ctx.fillStyle = "#38bdf8";
+    ctx.font = "700 11px 'Plus Jakarta Sans'";
+    ctx.fillText("Throw Snowballs (Space / Click) to Knock Rivals into the Water!", W * 0.5, 52);
+
+    // Draw Fighters
+    window.drawChubbyCharacter(ctx, this.player.x, this.player.y, 19, this.charObj, { vx: this.player.vx });
+    window.drawChubbyCharacter(ctx, this.cpu.x, this.cpu.y, 19, window.BERRY_DATA.characters[2], { vx: this.cpu.vx });
+
+    // Draw Snowballs
+    this.projectiles.forEach(sb => {
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#0a0f1d";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(sb.x, sb.y, sb.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
   }
 
   // ==================== 5. ESCAPE ROAD (BIG SCROLLING CITY + BUILDINGS + CIVILIAN CARS!) ====================
@@ -3407,6 +4149,28 @@ class BerryGameInstance {
       this.fireUniversalLaser();
     }
 
+    if (this.twoPlayerMode && ["basket_random", "soccer_random", "volley_random", "snowbrawl"].includes(eng)) {
+      // Player 1 Jump: W or Space
+      if (["KeyW", "Space"].includes(code)) {
+        if (this.player.onGround || infJump) {
+          this.player.vy = -11.4 * phys.jump;
+          this.player.onGround = false;
+          window.berrySound.play("jump");
+        }
+        if (eng === "snowbrawl") this.fireSnowball("p1");
+      }
+      // Player 2 Jump / Action: ArrowUp or Enter
+      if (["ArrowUp", "Enter", "ShiftRight"].includes(code)) {
+        if (this.cpu && (this.cpu.onGround || infJump)) {
+          this.cpu.vy = -11.4 * phys.jump;
+          this.cpu.onGround = false;
+          window.berrySound.play("jump");
+        }
+        if (eng === "snowbrawl") this.fireSnowball("p2");
+      }
+      return;
+    }
+
     if (["Space", "KeyW", "ArrowUp", "MouseClick"].includes(code)) {
       if (eng === "dont_look_down" && (this.player.onGround || this.player.jumps > 0 || infJump)) {
         this.player.vy = -11.6 * phys.jump;
@@ -3421,10 +4185,21 @@ class BerryGameInstance {
         this.player.vy = -11.2 * phys.jump;
         this.player.onGround = false;
         window.berrySound.play("jump");
-      } else if (eng === "basket_random" && (this.player.onGround || infJump)) {
-        this.player.vy = -11.4 * phys.jump;
+      } else if (["basket_random", "soccer_random", "volley_random"].includes(eng) && (this.player.onGround || infJump)) {
+        this.player.vy = -11.5 * phys.jump;
         this.player.onGround = false;
         window.berrySound.play("jump");
+      } else if (eng === "snowbrawl") {
+        if (code === "KeyW" || code === "ArrowUp") {
+          if (this.player.onGround || this.player.jumps > 0 || infJump) {
+            this.player.vy = -11.2 * phys.jump;
+            this.player.onGround = false;
+            this.player.jumps--;
+            window.berrySound.play("jump");
+          }
+        } else if (code === "Space" || code === "MouseClick") {
+          this.fireSnowball("p1");
+        }
       } else if (eng === "rooftop_snipers") {
         if (code === "KeyW" || code === "ArrowUp") {
           if (this.player.onGround || this.player.jumps > 0 || infJump) {
@@ -3575,6 +4350,9 @@ class BerryGameInstance {
     else if (eng === "dont_look_down") this.updateDontLookDown(W, H, inp, phys);
     else if (eng === "geometry_dash") this.updateGeometryDash(W, H, inp, phys);
     else if (eng === "basket_random") this.updateBasketRandom(W, H, inp, phys);
+    else if (eng === "soccer_random") this.updateSoccerRandom(W, H, inp, phys);
+    else if (eng === "volley_random") this.updateVolleyRandom(W, H, inp, phys);
+    else if (eng === "snowbrawl") this.updateSnowbrawl(W, H, inp, phys);
     else if (eng === "escape_road") this.updateEscapeRoad(W, H, inp, phys);
     else if (eng === "stickman_hook") this.updateStickmanHook(W, H, inp, phys);
     else if (eng === "rooftop_snipers") this.updateRooftopSnipers(W, H, inp, phys);
@@ -3648,6 +4426,9 @@ class BerryGameInstance {
     else if (eng === "dont_look_down") this.drawDontLookDown(ctx, W, H);
     else if (eng === "geometry_dash") this.drawGeometryDash(ctx, W, H);
     else if (eng === "basket_random") this.drawBasketRandom(ctx, W, H);
+    else if (eng === "soccer_random") this.drawSoccerRandom(ctx, W, H);
+    else if (eng === "volley_random") this.drawVolleyRandom(ctx, W, H);
+    else if (eng === "snowbrawl") this.drawSnowbrawl(ctx, W, H);
     else if (eng === "escape_road") this.drawEscapeRoad(ctx, W, H);
     else if (eng === "stickman_hook") this.drawStickmanHook(ctx, W, H);
     else if (eng === "rooftop_snipers") this.drawRooftopSnipers(ctx, W, H);

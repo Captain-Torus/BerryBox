@@ -299,6 +299,8 @@
     }
   }
 
+  let isTwoPlayerMode = false;
+
   function openPlayModal(game, challengeObj = null) {
     activeChallenge = challengeObj;
     if (typeof window.gtag === "function") {
@@ -320,6 +322,23 @@
     document.getElementById("modalScore").textContent = "0";
     document.getElementById("modalCoins").textContent = state.coins;
     document.getElementById("modalControlsHint").textContent = game.controls || "WASD / Arrows + Space";
+
+    // 2-Player Same-Keyboard Toggle Button for Basket Random, Soccer Random, Volley Random & Snowbrawl!
+    const btn2P = document.getElementById("modal2PToggleBtn");
+    if (btn2P) {
+      if (game.supports2P) {
+        btn2P.classList.remove("hidden");
+        btn2P.textContent = isTwoPlayerMode ? "👥 2P Mode ON (WASD vs Arrows)" : "👤 1P vs CPU (Click for 2P)";
+        btn2P.style.background = isTwoPlayerMode ? "#16a34a" : "#1d6ff2";
+        btn2P.onclick = () => {
+          isTwoPlayerMode = !isTwoPlayerMode;
+          toast(isTwoPlayerMode ? "👥 2-Player Same-Keyboard Mode ON! P1: WASD • P2: Arrow Keys!" : "🤖 Switched to 1P vs Smart CPU!");
+          openPlayModal(game, challengeObj);
+        };
+      } else {
+        btn2P.classList.add("hidden");
+      }
+    }
 
     renderModalLeaderboard(game);
 
@@ -348,6 +367,7 @@
 
     modalInstance = new window.BerryGameInstance(canvas, game, getEquippedChar(), {
       isPreview: false,
+      twoPlayerMode: Boolean(game.supports2P && isTwoPlayerMode),
       ghostFriend: ghostFriendConfig,
       onScoreChange: (pts) => {
         document.getElementById("modalScore").textContent = pts;
@@ -422,8 +442,8 @@
     state.friends.unshift({
       handle,
       charId,
-      gameId: "moto_x3m",
-      targetScore: 120,
+      gameId: "basket_random",
+      targetScore: 50,
       pinned: false,
       completed: false
     });
